@@ -1,13 +1,11 @@
-const OpenAI = require('openai');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 const fs = require('fs').promises;
 const path = require('path');
 
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
+// Initialize Gemini client
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// Analyze receipt using AI
+// Analyze receipt using Gemini AI
 async function analyzeReceipt(filePath, paymentCodeData) {
   try {
     // Read the image file
@@ -17,6 +15,7 @@ async function analyzeReceipt(filePath, paymentCodeData) {
 
     let mimeType = 'image/jpeg';
     if (ext === '.png') mimeType = 'image/png';
+    else if (ext === '.jpg' || ext === '.jpeg') mimeType = 'image/jpeg';
     else if (ext === '.pdf') {
       // For PDFs, you would need additional processing
       // For now, we'll return a message
@@ -46,7 +45,7 @@ Also, provide:
 - Whether this receipt appears to match the expected payment (true/false)
 - Any red flags or concerns (if any)
 
-Return the response in the following JSON format:
+Return the response in the following JSON format (only JSON, no markdown):
 {
   "amount": number,
   "date": "YYYY-MM-DD",
@@ -60,37 +59,35 @@ Return the response in the following JSON format:
   "extractedText": "raw extracted text from receipt"
 }`;
 
-    // Call OpenAI Vision API
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini", // Using vision model
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "text", text: prompt },
-            {
-              type: "image_url",
-              image_url: {
-                url: `data:${mimeType};base64,${base64Image}`
-              }
-            }
-          ]
-        }
-      ],
-      max_tokens: 1500
-    });
+    // Get the generative model (using gemini-1.5-flash for vision)
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-    // Parse the response
-    const content = response.choices[0].message.content;
+    // Prepare the image part
+    const imagePart = {
+      inlineData: {
+        data: base64Image,
+        mimeType: mimeType
+      }
+    };
+
+    // Call Gemini API with vision
+    const result = await model.generateContent([prompt, imagePart]);
+    const response = await result.response;
+    const content = response.text();
 
     // Try to extract JSON from the response
     let analysisData;
     try {
       // Remove markdown code blocks if present
-      const jsonMatch = content.match(/```json\n([\s\S]*?)\n```/) || content.match(/```\n([\s\S]*?)\n```/);
-      const jsonString = jsonMatch ? jsonMatch[1] : content;
+      const jsonMatch = content.match(/```json\n([\s\S]*?)\n```/) ||
+                       content.match(/```\n([\s\S]*?)\n```/) ||
+                       content.match(/\{[\s\S]*\}/);
+      const jsonString = jsonMatch ? (jsonMatch[1] || jsonMatch[0]) : content;
       analysisData = JSON.parse(jsonString);
     } catch (parseError) {
+      console.error('JSON Parse Error:', parseError);
+      console.log('Raw content:', content);
+
       // If parsing fails, create a structured response from the text
       analysisData = {
         amount: null,
@@ -127,14 +124,14 @@ Return the response in the following JSON format:
         notes: 'AI analysis failed. Manual review required.',
         confidenceScore: 0,
         matchesExpected: false,
-        concerns: ['AI analysis unavailable'],
+        concerns: ['AI analysis unavailable - ' + error.message],
         extractedText: ''
       }
     };
   }
 }
 
-// Alternative: Simple OCR simulation (fallback if OpenAI is not available)
+// Alternative: Simple OCR simulation (fallback if Gemini is not available)
 async function simulateOCR(filePath) {
   return {
     success: true,
