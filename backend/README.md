@@ -5,7 +5,7 @@ Backend API for the SchoolPay Verify system - a comprehensive school payment ver
 ## Features
 
 - **Payment Code Generation**: Generate unique payment codes for students
-- **Receipt Upload & Analysis**: AI-powered receipt verification using OpenAI
+- **Receipt Upload & Analysis**: AI-powered receipt verification using Google Gemini
 - **Admin Dashboard**: Comprehensive admin interface for managing receipts
 - **Authentication**: JWT-based authentication for admin users
 - **File Upload**: Secure file upload with validation
@@ -19,14 +19,14 @@ Backend API for the SchoolPay Verify system - a comprehensive school payment ver
 - **Database**: PostgreSQL (Supabase)
 - **Authentication**: JWT
 - **File Upload**: Multer
-- **AI/OCR**: OpenAI GPT-4 Vision API
+- **AI/OCR**: Google Gemini 1.5 Flash Vision API
 - **Image Processing**: Sharp
 
 ## Prerequisites
 
 - Node.js (v14.x or higher)
 - Supabase account
-- OpenAI API key (optional, for AI features)
+- Google Gemini API key (for AI features)
 
 ## Installation
 
@@ -47,7 +47,7 @@ Backend API for the SchoolPay Verify system - a comprehensive school payment ver
      - `SUPABASE_ANON_KEY`: Supabase anonymous key
      - `SUPABASE_SERVICE_ROLE_KEY`: Supabase service role key
      - `JWT_SECRET`: Secret key for JWT tokens
-     - `OPENAI_API_KEY`: OpenAI API key (optional)
+     - `GEMINI_API_KEY`: Google Gemini API key (get from https://makersuite.google.com/app/apikey)
 
 4. Initialize the database:
    ```bash
@@ -115,8 +115,8 @@ SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 JWT_SECRET=your-jwt-secret
 JWT_EXPIRES_IN=24h
 
-# AI Services
-OPENAI_API_KEY=your-openai-api-key
+# AI Services (Gemini)
+GEMINI_API_KEY=your-gemini-api-key
 
 # File Upload
 MAX_FILE_SIZE=10485760
@@ -166,7 +166,7 @@ backend/
 
 ## AI Receipt Analysis
 
-The system uses OpenAI's GPT-4 Vision API to analyze receipts:
+The system uses Google Gemini 1.5 Flash Vision API to analyze receipts:
 
 1. Extracts payment amount, date, and transaction details
 2. Verifies against expected payment information
@@ -263,8 +263,8 @@ curl -X POST http://localhost:3001/api/auth/login \
 - Ensure file type is allowed
 
 **AI analysis not working:**
-- Verify OPENAI_API_KEY is set
-- Check OpenAI account credits
+- Verify GEMINI_API_KEY is set (get from https://makersuite.google.com/app/apikey)
+- Check Google AI Studio API quota
 - System falls back to manual review if AI fails
 
 ## License

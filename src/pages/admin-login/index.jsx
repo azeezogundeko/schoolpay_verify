@@ -3,9 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet';
 import Icon from '../../components/AppIcon';
 import Button from '../../components/ui/Button';
-
-
 import SessionWarning from './components/SessionWarning';
+import { authAPI } from '../../services/api';
+import { formatErrorMessage, setAdminUser, clearAdminUser } from '../../utils/apiHelpers';
 
 const AdminLogin = () => {
   const navigate = useNavigate();
@@ -18,12 +18,6 @@ const AdminLogin = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
-
-  // Mock credentials for demonstration
-  const mockCredentials = {
-    email: 'admin@schoolpay.edu',
-    password: 'SchoolAdmin2025!'
-  };
 
   useEffect(() => {
     // Check if user is already logged in
@@ -80,30 +74,35 @@ const AdminLogin = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!validateForm()) return;
-    
+
     setIsLoading(true);
-    
-    // Simulate API call
-    setTimeout(() => {
-      if (formData.email === mockCredentials.email && 
-          formData.password === mockCredentials.password) {
-        // Successful login
-        localStorage.setItem('adminToken', 'mock-admin-token-2025');
-        localStorage.setItem('adminUser', JSON.stringify({
-          email: formData.email,
-          loginTime: new Date().toISOString(),
-          rememberMe: formData.rememberMe
-        }));
+    setErrors({});
+
+    try {
+      // Call login API
+      const response = await authAPI.login(
+        formData.email,
+        formData.password,
+        formData.rememberMe
+      );
+
+      if (response.success) {
+        // Store auth data
+        setAdminUser(response.data.admin, response.data.token);
+
+        // Navigate to dashboard
         navigate('/admin-dashboard');
-      } else {
-        setErrors({
-          general: 'Invalid credentials. Please check your email and password.'
-        });
       }
+    } catch (error) {
+      console.error('Login error:', error);
+      setErrors({
+        general: formatErrorMessage(error) || 'Invalid credentials. Please check your email and password.'
+      });
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
   };
 
   const handleForgotPassword = () => {
@@ -120,11 +119,16 @@ const AdminLogin = () => {
     console.log('Session extended');
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('adminToken');
-    localStorage.removeItem('adminUser');
-    setShowSessionWarning(false);
-    navigate('/admin-login');
+  const handleLogout = async () => {
+    try {
+      await authAPI.logout();
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      clearAdminUser();
+      setShowSessionWarning(false);
+      navigate('/admin-login');
+    }
   };
 
   return (

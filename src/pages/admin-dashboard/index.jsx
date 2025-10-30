@@ -8,13 +8,17 @@ import BulkActionsPanel from './components/BulkActionsPanel';
 import ReceiptTable from './components/ReceiptTable';
 import ActivityFeed from './components/ActivityFeed';
 import Pagination from './components/Pagination';
+import { receiptAPI, dashboardAPI } from '../../services/api';
+import { formatErrorMessage } from '../../utils/apiHelpers';
+import { useToastContext } from '../../contexts/ToastContext';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
+  const { toast } = useToastContext();
   const [selectedReceipts, setSelectedReceipts] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
-  const [sortConfig, setSortConfig] = useState({ column: 'submissionDate', direction: 'desc' });
+  const [sortConfig, setSortConfig] = useState({ column: 'created_at', direction: 'desc' });
   const [filters, setFilters] = useState({
     status: 'all',
     session: 'all',
@@ -24,6 +28,14 @@ const AdminDashboard = () => {
     fromDate: '',
     toDate: ''
   });
+
+  // API data states
+  const [receipts, setReceipts] = useState([]);
+  const [metrics, setMetrics] = useState({ total: 0, pending: 0, verified: 0, flagged: 0 });
+  const [activities, setActivities] = useState([]);
+  const [totalItems, setTotalItems] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   // Mock data for receipts with session information
   const mockReceipts = [
@@ -177,127 +189,102 @@ const AdminDashboard = () => {
     }
   }, [navigate]);
 
-  // Filter and sort receipts
-  const filteredAndSortedReceipts = useMemo(() => {
-    let filtered = [...mockReceipts];
-
-    // Apply status filter
-    if (filters.status !== 'all') {
-      filtered = filtered.filter(receipt => receipt.status === filters.status);
-    }
-
-    // Apply session filter
-    if (filters.session !== 'all') {
-      filtered = filtered.filter(receipt => receipt.session === filters.session);
-    }
-
-    // Apply search filter - enhanced to include student ID and code ID
-    if (filters.search) {
-      const searchTerm = filters.search.toLowerCase();
-      filtered = filtered.filter(receipt => 
-        receipt.referenceId.toLowerCase().includes(searchTerm) ||
-        receipt.studentName.toLowerCase().includes(searchTerm) ||
-        receipt.studentId.toLowerCase().includes(searchTerm) ||
-        receipt.studentEmail.toLowerCase().includes(searchTerm) ||
-        receipt.id.toLowerCase().includes(searchTerm)
-      );
-    }
-
-    // Apply date range filter
-    const now = new Date();
-    if (filters.dateRange !== 'all') {
-      const filterDate = new Date();
-      switch (filters.dateRange) {
-        case 'today':
-          filterDate.setHours(0, 0, 0, 0);
-          filtered = filtered.filter(receipt => receipt.submissionDate >= filterDate);
-          break;
-        case 'yesterday':
-          filterDate.setDate(filterDate.getDate() - 1);
-          filterDate.setHours(0, 0, 0, 0);
-          const yesterdayEnd = new Date(filterDate);
-          yesterdayEnd.setHours(23, 59, 59, 999);
-          filtered = filtered.filter(receipt => 
-            receipt.submissionDate >= filterDate && receipt.submissionDate <= yesterdayEnd
-          );
-          break;
-        case 'last7days':
-          filterDate.setDate(filterDate.getDate() - 7);
-          filtered = filtered.filter(receipt => receipt.submissionDate >= filterDate);
-          break;
-        case 'last30days':
-          filterDate.setDate(filterDate.getDate() - 30);
-          filtered = filtered.filter(receipt => receipt.submissionDate >= filterDate);
-          break;
-        case 'custom':
-          if (filters.fromDate) {
-            const fromDate = new Date(filters.fromDate);
-            filtered = filtered.filter(receipt => receipt.submissionDate >= fromDate);
-          }
-          if (filters.toDate) {
-            const toDate = new Date(filters.toDate);
-            toDate.setHours(23, 59, 59, 999);
-            filtered = filtered.filter(receipt => receipt.submissionDate <= toDate);
-          }
-          break;
+  // Fetch metrics
+  useEffect(() => {
+    const fetchMetrics = async () => {
+      try {
+        const response = await dashboardAPI.getMetrics();
+        if (response.success) {
+          setMetrics(response.data);
+        }
+      } catch (error) {
+        console.error('Error fetching metrics:', error);
       }
-    }
-
-    // Apply amount range filter
-    if (filters.amountRange !== 'all') {
-      switch (filters.amountRange) {
-        case '0-50':
-          filtered = filtered.filter(receipt => receipt.amount >= 0 && receipt.amount <= 50);
-          break;
-        case '51-100':
-          filtered = filtered.filter(receipt => receipt.amount >= 51 && receipt.amount <= 100);
-          break;
-        case '101-500':
-          filtered = filtered.filter(receipt => receipt.amount >= 101 && receipt.amount <= 500);
-          break;
-        case '500+':
-          filtered = filtered.filter(receipt => receipt.amount > 500);
-          break;
-      }
-    }
-
-    // Apply sorting
-    filtered.sort((a, b) => {
-      let aValue = a[sortConfig.column];
-      let bValue = b[sortConfig.column];
-
-      if (sortConfig.column === 'submissionDate') {
-        aValue = new Date(aValue);
-        bValue = new Date(bValue);
-      }
-
-      if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
-      if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
-      return 0;
-    });
-
-    return filtered;
-  }, [filters, sortConfig]);
-
-  // Calculate metrics
-  const metrics = useMemo(() => {
-    const total = mockReceipts.length;
-    const pending = mockReceipts.filter(r => r.status === 'pending').length;
-    const verified = mockReceipts.filter(r => r.status === 'verified').length;
-    const flagged = mockReceipts.filter(r => r.status === 'flagged').length;
-
-    return {
-      total,
-      pending,
-      verified,
-      flagged
     };
+
+    fetchMetrics();
+  }, [receipts]); // Refetch when receipts change
+
+  // Fetch activities
+  useEffect(() => {
+    const fetchActivities = async () => {
+      try {
+        const response = await dashboardAPI.getActivities(10);
+        if (response.success) {
+          setActivities(response.data);
+        }
+      } catch (error) {
+        console.error('Error fetching activities:', error);
+      }
+    };
+
+    fetchActivities();
+    // Refresh activities every 30 seconds
+    const interval = setInterval(fetchActivities, 30000);
+    return () => clearInterval(interval);
   }, []);
 
-  // Pagination
-  const totalPages = Math.ceil(filteredAndSortedReceipts.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedReceipts = filteredAndSortedReceipts.slice(startIndex, startIndex + itemsPerPage);
+  // Fetch receipts
+  useEffect(() => {
+    const fetchReceipts = async () => {
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        // Build filter params
+        const params = {
+          page: currentPage,
+          limit: itemsPerPage,
+          sortColumn: sortConfig.column,
+          sortDirection: sortConfig.direction
+        };
+
+        if (filters.status && filters.status !== 'all') {
+          params.status = filters.status;
+        }
+        if (filters.search) {
+          params.search = filters.search;
+        }
+        if (filters.fromDate) {
+          params.fromDate = filters.fromDate;
+        }
+        if (filters.toDate) {
+          params.toDate = filters.toDate;
+        }
+
+        const response = await receiptAPI.getAll(params);
+
+        if (response.success) {
+          // Transform API data to match component expectations
+          const transformedReceipts = response.data.receipts.map(receipt => ({
+            id: receipt.id,
+            referenceId: receipt.reference_id,
+            studentName: receipt.payment_codes?.student_name || 'Unknown',
+            studentId: receipt.payment_codes?.student_id || 'Unknown',
+            studentEmail: receipt.payment_codes?.student_email || '',
+            submissionDate: new Date(receipt.created_at),
+            amount: receipt.extracted_amount || receipt.payment_codes?.expected_amount || 0,
+            status: receipt.status,
+            session: receipt.payment_codes?.session || 'Unknown',
+            isUrgent: receipt.is_urgent || false
+          }));
+
+          setReceipts(transformedReceipts);
+          setTotalItems(response.data.pagination.total);
+        }
+      } catch (error) {
+        console.error('Error fetching receipts:', error);
+        setError(formatErrorMessage(error));
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchReceipts();
+  }, [currentPage, itemsPerPage, sortConfig, filters]);
+
+  // Pagination - calculated from API response
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
 
   const handleFilterChange = (key, value) => {
     setFilters(prev => ({ ...prev, [key]: value }));
@@ -331,20 +318,36 @@ const AdminDashboard = () => {
 
   const handleSelectAll = (isSelected) => {
     if (isSelected) {
-      setSelectedReceipts(paginatedReceipts.map(receipt => receipt.id));
+      setSelectedReceipts(receipts.map(receipt => receipt.id));
     } else {
       setSelectedReceipts([]);
     }
   };
 
-  const handleBulkApprove = () => {
-    console.log('Bulk approve:', selectedReceipts);
-    setSelectedReceipts([]);
+  const handleBulkApprove = async () => {
+    try {
+      await receiptAPI.bulkUpdate(selectedReceipts, 'verified');
+      toast.success(`Successfully approved ${selectedReceipts.length} receipt(s)`);
+      setSelectedReceipts([]);
+      // Refetch receipts
+      setFilters(prev => ({ ...prev }));
+    } catch (error) {
+      console.error('Bulk approve error:', error);
+      toast.error('Failed to approve receipts: ' + formatErrorMessage(error));
+    }
   };
 
-  const handleBulkReject = () => {
-    console.log('Bulk reject:', selectedReceipts);
-    setSelectedReceipts([]);
+  const handleBulkReject = async () => {
+    try {
+      await receiptAPI.bulkUpdate(selectedReceipts, 'rejected');
+      toast.success(`Successfully rejected ${selectedReceipts.length} receipt(s)`);
+      setSelectedReceipts([]);
+      // Refetch receipts
+      setFilters(prev => ({ ...prev }));
+    } catch (error) {
+      console.error('Bulk reject error:', error);
+      toast.error('Failed to reject receipts: ' + formatErrorMessage(error));
+    }
   };
 
   const handleBulkExport = () => {
@@ -435,28 +438,43 @@ const AdminDashboard = () => {
                 onClearSelection={() => setSelectedReceipts([])}
               />
 
-              <ReceiptTable
-                receipts={paginatedReceipts}
-                selectedReceipts={selectedReceipts}
-                onSelectReceipt={handleSelectReceipt}
-                onSelectAll={handleSelectAll}
-                onSort={handleSort}
-                sortConfig={sortConfig}
-              />
+              {isLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+                    <p className="mt-4 text-muted-foreground">Loading receipts...</p>
+                  </div>
+                </div>
+              ) : error ? (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <p className="text-red-600">{error}</p>
+                </div>
+              ) : (
+                <>
+                  <ReceiptTable
+                    receipts={receipts}
+                    selectedReceipts={selectedReceipts}
+                    onSelectReceipt={handleSelectReceipt}
+                    onSelectAll={handleSelectAll}
+                    onSort={handleSort}
+                    sortConfig={sortConfig}
+                  />
 
-              <Pagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                totalItems={filteredAndSortedReceipts.length}
-                itemsPerPage={itemsPerPage}
-                onPageChange={handlePageChange}
-                onItemsPerPageChange={handleItemsPerPageChange}
-              />
+                  <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    totalItems={totalItems}
+                    itemsPerPage={itemsPerPage}
+                    onPageChange={handlePageChange}
+                    onItemsPerPageChange={handleItemsPerPageChange}
+                  />
+                </>
+              )}
             </div>
 
             {/* Sidebar */}
             <div className="lg:col-span-1">
-              <ActivityFeed activities={mockActivities} />
+              <ActivityFeed activities={activities} />
             </div>
           </div>
         </div>

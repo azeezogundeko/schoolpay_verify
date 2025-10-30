@@ -8,52 +8,47 @@ import TrustSignals from './components/TrustSignals';
 import RecentActivity from './components/RecentActivity';
 import HelpSection from './components/HelpSection';
 import Icon from '../../components/AppIcon';
+import { paymentCodeAPI } from '../../services/api';
+import { formatErrorMessage } from '../../utils/apiHelpers';
+import { useToastContext } from '../../contexts/ToastContext';
 
 const PaymentCodeGeneration = () => {
+  const { toast } = useToastContext();
   const [isLoading, setIsLoading] = useState(false);
   const [generatedCode, setGeneratedCode] = useState(null);
-
-  const generateUniqueCode = () => {
-    const timestamp = Date.now().toString(36);
-    const random = Math.random().toString(36).substr(2, 5);
-    return `PAY${timestamp}${random}`.toUpperCase().substr(0, 12);
-  };
-
-  const generateReferenceId = () => {
-    const timestamp = Date.now().toString(36);
-    const random = Math.random().toString(36).substr(2, 3);
-    return `REF${timestamp}${random}`.toUpperCase();
-  };
+  const [error, setError] = useState(null);
 
   const handleFormSubmit = async (formData) => {
     setIsLoading(true);
-    
+    setError(null);
+
     try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      const code = generateUniqueCode();
-      const referenceId = generateReferenceId();
-      const generatedAt = new Date().toLocaleString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
+      // Call the real API
+      const response = await paymentCodeAPI.generate(formData);
 
-      const codeData = {
-        ...formData,
-        code,
-        referenceId,
-        generatedAt,
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-        status: 'active'
-      };
+      if (response.success) {
+        const codeData = {
+          ...formData,
+          code: response.data.code,
+          referenceId: response.data.referenceId,
+          generatedAt: new Date(response.data.generatedAt).toLocaleString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          }),
+          expiresAt: response.data.expiresAt,
+          status: response.data.status
+        };
 
-      setGeneratedCode(codeData);
+        setGeneratedCode(codeData);
+      }
     } catch (error) {
       console.error('Error generating code:', error);
+      const errorMsg = formatErrorMessage(error);
+      setError(errorMsg);
+      toast.error('Failed to generate payment code: ' + errorMsg);
     } finally {
       setIsLoading(false);
     }

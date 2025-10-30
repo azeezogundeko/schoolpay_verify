@@ -9,6 +9,8 @@ import FilePreview from './components/FilePreview';
 import PaymentCodeInput from './components/PaymentCodeInput';
 import ProcessingStatus from './components/ProcessingStatus';
 import ErrorHandler from './components/ErrorHandler';
+import { paymentCodeAPI, receiptAPI } from '../../services/api';
+import { formatErrorMessage } from '../../utils/apiHelpers';
 
 const ReceiptUpload = () => {
   const navigate = useNavigate();
@@ -62,24 +64,33 @@ const ReceiptUpload = () => {
   };
 
   // Handle payment code change with validation
-  const handlePaymentCodeChange = (value) => {
+  const handlePaymentCodeChange = async (value) => {
     setPaymentCode(value);
     setPaymentCodeError('');
     setCodeVerificationStatus(null);
 
-    if (value.length > 0) {
+    if (value.length > 0 && validatePaymentCode(value)) {
       setIsVerifyingCode(true);
-      
-      // Simulate verification delay
-      setTimeout(() => {
-        if (validatePaymentCode(value)) {
+
+      try {
+        // Verify with API
+        const response = await paymentCodeAPI.verify(value);
+        if (response.success && response.data.valid) {
           setCodeVerificationStatus('valid');
-        } else if (value.length >= 10) {
+        } else {
           setCodeVerificationStatus('invalid');
-          setPaymentCodeError('Invalid payment code format. Expected format: PAY-YYYY-XXXXXX');
+          setPaymentCodeError('Payment code not found or already used');
         }
+      } catch (error) {
+        console.error('Error verifying code:', error);
+        setCodeVerificationStatus('invalid');
+        setPaymentCodeError('Unable to verify payment code');
+      } finally {
         setIsVerifyingCode(false);
-      }, 1000);
+      }
+    } else if (value.length >= 10 && !validatePaymentCode(value)) {
+      setCodeVerificationStatus('invalid');
+      setPaymentCodeError('Invalid payment code format. Expected format: PAY-YYYY-XXXXXX');
     }
   };
 
@@ -102,7 +113,7 @@ const ReceiptUpload = () => {
   // Handle file selection
   const handleFilesSelected = (selectedFiles) => {
     setError(null);
-    
+
     // Validate each file
     const validFiles = [];
     for (const file of selectedFiles) {
@@ -114,101 +125,8 @@ const ReceiptUpload = () => {
       validFiles.push(file);
     }
 
-    // Add valid files
-    setFiles(prev => [...prev, ...validFiles]);
-    
-    // Start upload simulation
-    if (validFiles.length > 0) {
-      simulateUpload(validFiles);
-    }
-  };
-
-  // Simulate file upload process
-  const simulateUpload = (uploadFiles) => {
-    setIsUploading(true);
-    setUploadProgress(0);
-
-    // Initialize processing status for each file
-    const newProcessingStatus = {};
-    uploadFiles.forEach(file => {
-      newProcessingStatus[file.name] = 'uploading';
-    });
-    setProcessingStatus(prev => ({ ...prev, ...newProcessingStatus }));
-
-    // Simulate upload progress
-    const progressInterval = setInterval(() => {
-      setUploadProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(progressInterval);
-          setIsUploading(false);
-          
-          // Update file status to processing
-          uploadFiles.forEach(file => {
-            newProcessingStatus[file.name] = 'processing';
-          });
-          setProcessingStatus(prev => ({ ...prev, ...newProcessingStatus }));
-          
-          // Start processing simulation
-          setTimeout(() => simulateProcessing(uploadFiles), 1000);
-          return 100;
-        }
-        return prev + 10;
-      });
-    }, 200);
-  };
-
-  // Simulate processing steps
-  const simulateProcessing = (processFiles) => {
-    setIsProcessing(true);
-    
-    // Update processing steps
-    const steps = [...processingSteps];
-    steps[0].status = 'completed'; // Upload completed
-    steps[1].status = 'processing'; // OCR processing
-    setProcessingSteps(steps);
-
-    // Simulate OCR processing
-    setTimeout(() => {
-      const updatedSteps = [...steps];
-      updatedSteps[1].status = 'completed';
-      updatedSteps[2].status = 'processing'; // AI Analysis
-      setProcessingSteps(updatedSteps);
-
-      // Simulate AI analysis
-      setTimeout(() => {
-        const finalSteps = [...updatedSteps];
-        finalSteps[2].status = 'completed';
-        finalSteps[3].status = 'processing'; // Verification
-        setProcessingSteps(finalSteps);
-
-        // Simulate verification
-        setTimeout(() => {
-          const completeSteps = [...finalSteps];
-          completeSteps[3].status = 'completed';
-          setProcessingSteps(completeSteps);
-
-          // Update file status to success
-          const successStatus = {};
-          processFiles.forEach(file => {
-            successStatus[file.name] = 'success';
-          });
-          setProcessingStatus(prev => ({ ...prev, ...successStatus }));
-          
-          setIsProcessing(false);
-          
-          // Navigate to confirmation after processing
-          setTimeout(() => {
-            navigate('/upload-confirmation-status', {
-              state: {
-                paymentCode,
-                files: processFiles,
-                referenceId: `REF-${Date.now()}`
-              }
-            });
-          }, 2000);
-        }, 2000);
-      }, 2000);
-    }, 2000);
+    // Add valid files (only support one file for now)
+    setFiles(validFiles.slice(0, 1));
   };
 
   // Remove file from list
@@ -225,7 +143,7 @@ const ReceiptUpload = () => {
   };
 
   // Handle form submission
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!paymentCode) {
       setPaymentCodeError('Payment code is required');
       return;
@@ -241,9 +159,67 @@ const ReceiptUpload = () => {
       return;
     }
 
-    // Start processing if not already processing
-    if (!isProcessing && !isUploading) {
-      simulateProcessing(files);
+    // Start processing
+    setIsProcessing(true);
+    setIsUploading(true);
+    setUploadProgress(0);
+
+    // Update processing steps
+    const steps = [...processingSteps];
+    steps[0].status = 'processing'; // Upload started
+    setProcessingSteps(steps);
+
+    try {
+      // Prepare form data
+      const formData = new FormData();
+      formData.append('receipt', files[0]);
+      formData.append('paymentCode', paymentCode);
+
+      // Simulate progress
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => Math.min(prev + 10, 90));
+      }, 200);
+
+      // Upload receipt
+      const response = await receiptAPI.upload(formData);
+      clearInterval(progressInterval);
+      setUploadProgress(100);
+
+      if (response.success) {
+        // Update all steps to completed
+        const completedSteps = steps.map(step => ({ ...step, status: 'completed' }));
+        setProcessingSteps(completedSteps);
+
+        // Update file status
+        setProcessingStatus({ [files[0].name]: 'success' });
+
+        // Wait a moment then navigate
+        setTimeout(() => {
+          navigate('/upload-confirmation-status', {
+            state: {
+              paymentCode,
+              files: files,
+              referenceId: response.data.referenceId,
+              status: response.data.status,
+              analysisData: response.data.analysis
+            }
+          });
+        }, 1500);
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      setError({
+        type: 'upload_failed',
+        details: formatErrorMessage(error)
+      });
+
+      // Reset processing steps
+      const failedSteps = processingSteps.map(step => ({ ...step, status: 'pending' }));
+      setProcessingSteps(failedSteps);
+      setProcessingStatus({ [files[0].name]: 'error' });
+    } finally {
+      setIsUploading(false);
+      setIsProcessing(false);
     }
   };
 
