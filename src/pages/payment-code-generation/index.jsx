@@ -10,8 +10,10 @@ import HelpSection from './components/HelpSection';
 import Icon from '../../components/AppIcon';
 import { paymentCodeAPI } from '../../services/api';
 import { formatErrorMessage } from '../../utils/apiHelpers';
+import { useToastContext } from '../../contexts/ToastContext';
 
 const PaymentCodeGeneration = () => {
+  const { toast } = useToastContext();
   const [isLoading, setIsLoading] = useState(false);
   const [generatedCode, setGeneratedCode] = useState(null);
   const [error, setError] = useState(null);
@@ -44,8 +46,9 @@ const PaymentCodeGeneration = () => {
       }
     } catch (error) {
       console.error('Error generating code:', error);
-      setError(formatErrorMessage(error));
-      alert('Failed to generate payment code: ' + formatErrorMessage(error));
+      const errorMsg = formatErrorMessage(error);
+      setError(errorMsg);
+      toast.error('Failed to generate payment code: ' + errorMsg);
     } finally {
       setIsLoading(false);
     }

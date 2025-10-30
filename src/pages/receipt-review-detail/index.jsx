@@ -9,12 +9,18 @@ import SubmissionTimeline from './components/SubmissionTimeline';
 import DecisionPanel from './components/DecisionPanel';
 import NavigationControls from './components/NavigationControls';
 import Icon from '../../components/AppIcon';
+import { receiptAPI } from '../../services/api';
+import { formatErrorMessage } from '../../utils/apiHelpers';
+import { useToastContext } from '../../contexts/ToastContext';
 
 const ReceiptReviewDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { toast } = useToastContext();
   const [receipt, setReceipt] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Mock receipt data
   const mockReceipt = {
@@ -116,17 +122,76 @@ Status: Completed`,
   ];
 
   useEffect(() => {
-    // Simulate loading receipt data
     const loadReceipt = async () => {
+      if (!id) {
+        navigate('/admin-dashboard');
+        return;
+      }
+
       setLoading(true);
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setReceipt(mockReceipt);
-      setLoading(false);
+      setError(null);
+
+      try {
+        const response = await receiptAPI.getById(id);
+
+        if (response.success) {
+          const apiReceipt = response.data;
+
+          // Transform API data to match component expectations
+          const transformedReceipt = {
+            id: apiReceipt.id,
+            referenceId: apiReceipt.reference_id,
+            studentName: apiReceipt.payment_codes?.student_name || 'Unknown',
+            studentId: apiReceipt.payment_codes?.student_id || 'Unknown',
+            email: apiReceipt.payment_codes?.student_email || 'Unknown',
+            phone: '+1 (555) 123-4567', // Not in DB yet
+            grade: `Session: ${apiReceipt.payment_codes?.session}`,
+            generatedCode: apiReceipt.payment_codes?.code || 'N/A',
+            extractedCode: apiReceipt.ai_analysis?.transactionRef || apiReceipt.payment_codes?.code,
+            codeMatch: true,
+            codeDifferences: [],
+            imageUrl: apiReceipt.file_url ? `http://localhost:3001/${apiReceipt.file_url}` : null,
+            fileSize: apiReceipt.file_size ? `${(apiReceipt.file_size / 1024 / 1024).toFixed(2)} MB` : 'Unknown',
+            format: apiReceipt.file_type?.split('/')[1]?.toUpperCase() || 'Unknown',
+            dimensions: '1200x1600', // Not stored in DB
+            uploadTime: new Date(apiReceipt.created_at).toLocaleString(),
+            status: apiReceipt.status,
+            submissionDate: new Date(apiReceipt.created_at).toLocaleDateString(),
+            ocrResults: {
+              extractedText: apiReceipt.extracted_text || 'No text extracted',
+              confidence: apiReceipt.confidence_score || 0,
+              processingTime: '2.3 seconds' // Not stored
+            },
+            aiAnalysis: {
+              overallScore: apiReceipt.confidence_score || 0,
+              factors: [
+                {
+                  name: 'Confidence Score',
+                  score: apiReceipt.confidence_score || 0,
+                  description: apiReceipt.ai_analysis?.notes || 'AI analysis completed'
+                }
+              ]
+            },
+            extractedAmount: apiReceipt.extracted_amount,
+            extractedDate: apiReceipt.extracted_date,
+            adminNotes: apiReceipt.admin_notes,
+            isUrgent: apiReceipt.is_urgent,
+            flags: apiReceipt.ai_analysis?.concerns || [],
+            previousActions: []
+          };
+
+          setReceipt(transformedReceipt);
+        }
+      } catch (err) {
+        console.error('Error loading receipt:', err);
+        setError(formatErrorMessage(err));
+      } finally {
+        setLoading(false);
+      }
     };
 
     loadReceipt();
-  }, [id]);
+  }, [id, navigate]);
 
   useEffect(() => {
     // Keyboard shortcuts
@@ -154,30 +219,43 @@ Status: Completed`,
   }, []);
 
   const handleDecision = async (decisionData) => {
-    console.log('Decision submitted:', decisionData);
-    // Mock API call to submit decision
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // Update receipt status
-    setReceipt(prev => ({
-      ...prev,
-      status: decisionData.decision === 'approve' ? 'approved' : 
-              decisionData.decision === 'reject' ? 'rejected' : 'info-requested',
-      lastAction: decisionData
-    }));
+    setIsSubmitting(true);
 
-    // Navigate back to dashboard after successful submission
-    if (decisionData.decision !== 'request-info') {
-      setTimeout(() => {
-        navigate('/admin-dashboard');
-      }, 2000);
+    try {
+      const response = await receiptAPI.updateStatus(
+        id,
+        decisionData.decision,
+        decisionData.comments
+      );
+
+      if (response.success) {
+        // Update local state
+        setReceipt(prev => ({
+          ...prev,
+          status: decisionData.decision,
+          adminNotes: decisionData.comments
+        }));
+
+        // Show success message
+        toast.success(`Receipt ${decisionData.decision} successfully!`);
+
+        // Navigate back to dashboard
+        setTimeout(() => {
+          navigate('/admin-dashboard');
+        }, 1500);
+      }
+    } catch (err) {
+      console.error('Error submitting decision:', err);
+      toast.error('Failed to submit decision: ' + formatErrorMessage(err));
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleNavigate = (direction) => {
-    // Mock navigation logic
+    // Navigation logic
     console.log(`Navigating to ${direction} receipt`);
-    // In real app, this would load the next/previous receipt
+    // In real app, this would load the next/previous receipt based on filtered list
   };
 
   const customBreadcrumbs = [

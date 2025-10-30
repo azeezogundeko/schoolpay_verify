@@ -10,9 +10,11 @@ import ActivityFeed from './components/ActivityFeed';
 import Pagination from './components/Pagination';
 import { receiptAPI, dashboardAPI } from '../../services/api';
 import { formatErrorMessage } from '../../utils/apiHelpers';
+import { useToastContext } from '../../contexts/ToastContext';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
+  const { toast } = useToastContext();
   const [selectedReceipts, setSelectedReceipts] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
@@ -325,24 +327,26 @@ const AdminDashboard = () => {
   const handleBulkApprove = async () => {
     try {
       await receiptAPI.bulkUpdate(selectedReceipts, 'verified');
+      toast.success(`Successfully approved ${selectedReceipts.length} receipt(s)`);
       setSelectedReceipts([]);
       // Refetch receipts
       setFilters(prev => ({ ...prev }));
     } catch (error) {
       console.error('Bulk approve error:', error);
-      alert('Failed to approve receipts: ' + formatErrorMessage(error));
+      toast.error('Failed to approve receipts: ' + formatErrorMessage(error));
     }
   };
 
   const handleBulkReject = async () => {
     try {
       await receiptAPI.bulkUpdate(selectedReceipts, 'rejected');
+      toast.success(`Successfully rejected ${selectedReceipts.length} receipt(s)`);
       setSelectedReceipts([]);
       // Refetch receipts
       setFilters(prev => ({ ...prev }));
     } catch (error) {
       console.error('Bulk reject error:', error);
-      alert('Failed to reject receipts: ' + formatErrorMessage(error));
+      toast.error('Failed to reject receipts: ' + formatErrorMessage(error));
     }
   };
 
