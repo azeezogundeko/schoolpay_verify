@@ -6,3 +6,16 @@ package-lock.json
 .vscode/
 .idea/
 vite.config.*s.*
+
+# Backend
+backend/node_modules/
+backend/uploads/*
+!backend/uploads/.gitkeep
+backend/.env
+backend/logs/
+backend/*.log
+
+# Environment files
+.env
+.env.local
+.env.production
