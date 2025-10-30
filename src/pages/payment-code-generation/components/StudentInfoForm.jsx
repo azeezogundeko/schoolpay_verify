@@ -8,6 +8,7 @@ const StudentInfoForm = ({ onSubmit, isLoading }) => {
   const [formData, setFormData] = useState({
     studentName: '',
     studentId: '',
+    studentEmail: '',
     paymentAmount: '',
     paymentPurpose: 'tuition',
     session: '2024/2025'
@@ -46,6 +47,12 @@ const StudentInfoForm = ({ onSubmit, isLoading }) => {
       newErrors.studentId = 'Student ID must be 6-12 alphanumeric characters';
     }
 
+    if (!formData.studentEmail.trim()) {
+      newErrors.studentEmail = 'Email is required';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.studentEmail.trim())) {
+      newErrors.studentEmail = 'Please enter a valid email address';
+    }
+
     if (!formData.paymentAmount) {
       newErrors.paymentAmount = 'Payment amount is required';
     } else if (isNaN(formData.paymentAmount) || parseFloat(formData.paymentAmount) <= 0) {
@@ -80,9 +87,14 @@ const StudentInfoForm = ({ onSubmit, isLoading }) => {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (validateForm()) {
+      // Map form fields to API expected fields
       onSubmit({
-        ...formData,
-        paymentAmount: parseFloat(formData.paymentAmount)
+        studentName: formData.studentName,
+        studentId: formData.studentId,
+        studentEmail: formData.studentEmail,
+        session: formData.session,
+        paymentType: formData.paymentPurpose,
+        expectedAmount: parseFloat(formData.paymentAmount)
       });
     }
   };
@@ -119,6 +131,19 @@ const StudentInfoForm = ({ onSubmit, isLoading }) => {
             value={formData.studentId}
             onChange={(e) => handleInputChange('studentId', e.target.value.toUpperCase())}
             error={errors.studentId}
+            required
+            disabled={isLoading}
+          />
+        </div>
+
+        <div className="grid grid-cols-1">
+          <Input
+            label="Email Address"
+            type="email"
+            placeholder="Enter your email address"
+            value={formData.studentEmail}
+            onChange={(e) => handleInputChange('studentEmail', e.target.value)}
+            error={errors.studentEmail}
             required
             disabled={isLoading}
           />
