@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  # Backend API Service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: schoolpay-backend
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRES_IN=24h
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - MAX_FILE_SIZE=10485760
+      - ALLOWED_FILE_TYPES=image/jpeg,image/jpg,image/png,application/pdf
+    volumes:
+      - backend-uploads:/app/uploads
+    networks:
+      - schoolpay-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Frontend Service
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: schoolpay-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    environment:
+      - VITE_API_URL=http://localhost:3001/api
+    depends_on:
+      - backend
+    networks:
+      - schoolpay-network
+
+networks:
+  schoolpay-network:
+    driver: bridge
+
+volumes:
+  backend-uploads:
+    driver: local

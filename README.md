@@ -8,7 +8,7 @@ SchoolPay Verify streamlines the payment verification process for educational in
 - Generating unique payment codes for students
 - Accepting receipt uploads with automatic AI analysis
 - Providing an admin dashboard for efficient payment review
-- Using OpenAI GPT-4 Vision for intelligent receipt verification
+- Using Google Gemini for intelligent receipt verification
 
 ## ✨ Features
 
@@ -39,25 +39,59 @@ This is a full-stack application with:
 - **Frontend**: React 18 + Vite + TailwindCSS
 - **Backend**: Node.js + Express.js
 - **Database**: PostgreSQL (Supabase)
-- **AI/OCR**: OpenAI GPT-4 Vision API
+- **AI/OCR**: Google Gemini 1.5 Flash API
 - **Authentication**: JWT-based
+- **Deployment**: Docker & Docker Compose
 
 ## 📋 Prerequisites
 
+### For Docker Deployment (Recommended)
+- Docker Engine 20.10 or higher
+- Docker Compose 2.0 or higher
+- Supabase account (for database)
+- Google Gemini API key (optional, for AI features)
+
+### For Manual Setup
 - Node.js (v14.x or higher)
 - npm or yarn
 - Supabase account (for database)
-- OpenAI API key (optional, for AI features)
+- Google Gemini API key (optional, for AI features)
 
 ## 🚀 Quick Start
 
-### 1. Clone the Repository
+### Option 1: Docker Deployment (Recommended)
+
+```bash
+# 1. Clone the repository
+git clone <repository-url>
+cd schoolpay_verify
+
+# 2. Configure environment variables
+cp .env.example .env
+# Edit .env with your credentials
+
+# 3. Start all services
+docker-compose up -d
+
+# 4. Initialize database
+docker-compose exec backend npm run init-db
+
+# Access the application
+# Frontend: http://localhost
+# Backend API: http://localhost:3001
+```
+
+See [DOCKER.md](./DOCKER.md) for detailed Docker documentation.
+
+### Option 2: Manual Setup
+
+#### 1. Clone the Repository
 ```bash
 git clone <repository-url>
 cd schoolpay_verify
 ```
 
-### 2. Frontend Setup
+#### 2. Frontend Setup
 ```bash
 # Install frontend dependencies
 npm install
@@ -71,7 +105,7 @@ npm start
 
 The frontend will run on `http://localhost:5173`
 
-### 3. Backend Setup
+#### 3. Backend Setup
 ```bash
 # Navigate to backend directory
 cd backend
@@ -142,7 +176,7 @@ SUPABASE_URL=your-supabase-url
 SUPABASE_ANON_KEY=your-anon-key
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 JWT_SECRET=your-jwt-secret
-OPENAI_API_KEY=your-openai-api-key
+GEMINI_API_KEY=your-gemini-api-key
 ADMIN_EMAIL=admin@schoolpay.edu
 ADMIN_PASSWORD=SchoolAdmin2025!
 FRONTEND_URL=http://localhost:5173
@@ -212,8 +246,13 @@ Full API documentation available in `backend/README.md`
 - PostgreSQL (Supabase)
 - JWT Authentication
 - Multer (file upload)
-- OpenAI API
+- Google Gemini API
 - Bcrypt
+
+### DevOps
+- Docker & Docker Compose
+- Nginx (reverse proxy)
+- Volume persistence for uploads
 
 ## 🧪 Testing
 
@@ -228,13 +267,31 @@ npm test
 
 ## 📦 Deployment
 
-### Frontend Deployment
+### Docker Deployment (Recommended)
+
+See [DOCKER.md](./DOCKER.md) for comprehensive Docker deployment guide including:
+- Production configuration
+- Security best practices
+- Reverse proxy setup
+- SSL/TLS configuration
+- Monitoring and logging
+- Backup strategies
+
+Quick production deployment:
+```bash
+# Using production overrides
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+### Manual Deployment
+
+#### Frontend Deployment
 ```bash
 npm run build
 # Deploy the dist/ folder to your hosting provider
 ```
 
-### Backend Deployment
+#### Backend Deployment
 - Deploy to platforms like Heroku, Railway, or Render
 - Ensure environment variables are set
 - Set up Supabase in production
@@ -264,8 +321,9 @@ MIT License
 
 - Built with [Rocket.new](https://rocket.new)
 - Powered by React, Node.js, and Supabase
-- AI capabilities by OpenAI
+- AI capabilities by Google Gemini
 - UI components styled with TailwindCSS
+- Containerization with Docker
 
 ## 📞 Support
 
