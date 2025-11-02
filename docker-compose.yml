@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Backend API Service
   backend:
@@ -7,29 +5,32 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: schoolpay-backend
-    restart: unless-stopped
-    ports:
-      - "3001:3001"
+    restart: always
+    expose:
+      - 3001
+    env_file:
+      - .env
     environment:
       - NODE_ENV=production
       - PORT=3001
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
-      - JWT_SECRET=${JWT_SECRET}
-      - JWT_EXPIRES_IN=24h
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - MAX_FILE_SIZE=10485760
-      - ALLOWED_FILE_TYPES=image/jpeg,image/jpg,image/png,application/pdf
+      - DOCKER_CONTAINER=1
     volumes:
       - backend-uploads:/app/uploads
     networks:
-      - schoolpay-network
+      - dokploy-network
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.schoolpay-backend.rule=Host(`api.schoolpay.yourdomain.com`)
+      - traefik.http.routers.schoolpay-backend.entrypoints=websecure
+      - traefik.http.routers.schoolpay-backend.tls=true
+      - traefik.http.routers.schoolpay-backend.tls.certresolver=letsencrypt
+      - traefik.http.services.schoolpay-backend.loadbalancer.server.port=3001
 
   # Frontend Service
   frontend:
@@ -37,20 +38,29 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: schoolpay-frontend
-    restart: unless-stopped
-    ports:
-      - "80:80"
+    restart: always
+    expose:
+      - 80
+    env_file:
+      - .env
     environment:
-      - VITE_API_URL=http://localhost:3001/api
+      - VITE_API_URL=https://api.schoolpay.yourdomain.com/api
     depends_on:
       - backend
     networks:
-      - schoolpay-network
-
-networks:
-  schoolpay-network:
-    driver: bridge
+      - dokploy-network
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.schoolpay-frontend.rule=Host(`schoolpay.yourdomain.com`)
+      - traefik.http.routers.schoolpay-frontend.entrypoints=websecure
+      - traefik.http.routers.schoolpay-frontend.tls=true
+      - traefik.http.routers.schoolpay-frontend.tls.certresolver=letsencrypt
+      - traefik.http.services.schoolpay-frontend.loadbalancer.server.port=80
 
 volumes:
   backend-uploads:
     driver: local
+
+networks:
+  dokploy-network:
+    external: true
